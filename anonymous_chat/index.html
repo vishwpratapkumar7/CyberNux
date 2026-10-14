@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ANONYMOUS CHAT</title>
+<style>
+  :root{
+    --bg:#05070a; --panel:#0a0d12; --panel2:#07090d; --line:#1b232e;
+    --red:#ff2a44; --redline:#a01c33; --red-glow:rgba(255,42,68,.4);
+    --cyan:#19e6ff; --green:#2bffab; --yellow:#ffd24a; --magenta:#ff5ce1;
+    --text:#c7d3dd; --dim:#5c6a77;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{height:100%}
+  body{
+    min-height:100%; background:var(--bg); color:var(--text);
+    font-family:"Cascadia Code","Consolas","DejaVu Sans Mono","Courier New",monospace;
+    font-size:14px; display:flex; flex-direction:column;
+  }
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:99;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px);
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding:14px 18px; border-bottom:1px solid var(--redline);
+    background:linear-gradient(180deg,rgba(255,42,68,.09),rgba(255,42,68,0));
+  }
+  .logo h1{font-size:20px;letter-spacing:5px;color:var(--red);text-shadow:0 0 14px var(--red-glow)}
+  .logo h1 b{color:var(--cyan);text-shadow:0 0 14px rgba(25,230,255,.55)}
+  .logo p{color:var(--dim);font-size:11px;letter-spacing:2px;margin-top:3px}
+  .status{
+    min-width:132px;text-align:center;border:1px solid var(--line);color:var(--dim);
+    padding:5px 12px;font-size:12px;letter-spacing:2px;background:var(--panel2);
+  }
+  .status.st-connecting{color:var(--yellow);border-color:var(--yellow);animation:blink 1.1s infinite}
+  .status.st-on{color:var(--green);border-color:var(--green);background:rgba(43,255,171,.08);text-shadow:0 0 8px rgba(43,255,171,.6)}
+  .status.st-err{color:var(--red);border-color:var(--red);background:rgba(255,42,68,.08)}
+  @keyframes blink{50%{opacity:.35}}
+
+  .app{width:100%;max-width:1060px;margin:0 auto;padding:14px;flex:1;display:flex;flex-direction:column;gap:14px}
+  .panel{background:var(--panel);border:1px solid var(--redline);box-shadow:inset 0 0 22px rgba(255,42,68,.05)}
+  .panel-head{
+    color:var(--cyan);font-size:12px;letter-spacing:2px;padding:8px 12px;
+    border-bottom:1px solid var(--line);background:rgba(25,230,255,.045);
+  }
+  .connect-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;padding:12px;align-items:end}
+  label{display:flex;flex-direction:column;gap:5px;font-size:11px;letter-spacing:2px;color:var(--dim)}
+  input{
+    background:var(--panel2);border:1px solid #232d3a;color:var(--text);
+    padding:9px 10px;font:inherit;outline:none;width:100%;
+  }
+  input:focus{border-color:var(--cyan);box-shadow:0 0 10px rgba(25,230,255,.25)}
+  input:disabled{opacity:.4}
+  .btns{display:flex;gap:10px}
+  .btn{
+    font:inherit;font-weight:700;letter-spacing:2px;cursor:pointer;padding:10px 16px;
+    text-transform:uppercase;background:transparent;border:1px solid var(--red);color:var(--red);
+  }
+  .btn:hover:not(:disabled){background:var(--red);color:#04060a}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--red);color:#04060a}
+  .btn.primary:hover:not(:disabled){box-shadow:0 0 16px var(--red-glow)}
+  .form-error{display:none;color:var(--red);font-size:12px;padding:0 12px 12px}
+  .form-error.show{display:block}
+
+  .grid{display:grid;grid-template-columns:230px 1fr;gap:14px;flex:1}
+  .side{display:flex;flex-direction:column}
+  .chan-name{
+    padding:10px 12px;font-size:18px;color:var(--red);
+    text-shadow:0 0 10px var(--red-glow);border-bottom:1px solid var(--line);
+  }
+  .panel-sub{padding:10px 12px 4px;color:var(--cyan);font-size:11px;letter-spacing:2px}
+  .users{list-style:none;overflow-y:auto;padding:6px 12px 12px;max-height:280px}
+  .users li{padding:3px 0}
+  .users li::before{content:"▸ ";color:var(--red)}
+  .users li.dim{color:var(--dim)}
+  .users li.dim::before{content:""}
+
+  .chat{display:flex;flex-direction:column}
+  .messages{height:56vh;min-height:300px;overflow-y:auto;padding:10px 12px}
+  .msg{padding:2px 0;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  .msg .t{color:var(--dim);font-size:11px;margin-right:7px}
+  .msg .n{font-weight:700;margin-right:7px}
+  .msg .n::after{content:":";color:var(--dim)}
+  .sysline{color:var(--magenta);padding:2px 0}
+  .sysline::before{content:"* "}
+  .warnline{color:var(--red);padding:2px 0;text-shadow:0 0 8px var(--red-glow)}
+  .warnline::before{content:"[!] ";font-weight:700}
+
+  .inputrow{display:flex;gap:10px;padding:10px 12px;border-top:1px solid var(--line);background:var(--panel2)}
+  .inputrow input{flex:1}
+
+  footer{padding:10px;text-align:center;color:var(--dim);font-size:11px;letter-spacing:1px;border-top:1px solid var(--line)}
+
+  ::-webkit-scrollbar{width:9px}
+  ::-webkit-scrollbar-track{background:var(--panel2)}
+  ::-webkit-scrollbar-thumb{background:#232d3a;border:2px solid var(--panel2)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--redline)}
+
+  @media (max-width:700px){
+    .logo h1{font-size:15px;letter-spacing:3px}
+    .app{padding:10px;gap:10px}
+    .connect-grid{grid-template-columns:1fr}
+    .btns .btn{flex:1}
+    .grid{grid-template-columns:1fr}
+    .users{display:flex;flex-wrap:wrap;gap:4px 14px;max-height:120px}
+    .messages{height:44vh;min-height:240px}
+    input{font-size:16px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <h1>ANONYMOUS <b>CHAT</b></h1>
+    <p>// no accounts · no logs here · pick a nick and a channel</p>
+  </div>
+  <div id="status" class="status">DISCONNECTED</div>
+</header>
+
+<main class="app">
+  <section class="panel">
+    <div class="panel-head">▌ CONNECTION</div>
+    <div class="connect-grid">
+      <label>NICKNAME
+        <input id="nick" maxlength="49" placeholder="anon_42" autocomplete="off" spellcheck="false">
+      </label>
+      <label>CHANNEL
+        <input id="chan" maxlength="25" placeholder="lounge" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="btns">
+        <button id="btnConnect" class="btn primary" type="button">Connect</button>
+        <button id="btnDisconnect" class="btn" type="button" disabled>Disconnect</button>
+      </div>
+    </div>
+    <div id="formError" class="form-error"></div>
+  </section>
+
+  <div class="grid">
+    <aside class="panel side">
+      <div class="panel-head">▌ CHANNEL</div>
+      <div class="chan-name" id="chanName">—</div>
+      <div class="panel-sub">ONLINE (<span id="userCount">0</span>)</div>
+      <ul class="users" id="users"><li class="dim">not connected</li></ul>
+    </aside>
+
+    <section class="panel chat">
+      <div class="panel-head">▌ MESSAGES</div>
+      <div class="messages" id="messages" aria-live="polite">
+        
+      </div>
+      <div class="inputrow">
+        <input id="msg" maxlength="512" placeholder="type a message…" autocomplete="off" disabled spellcheck="false">
+        <button id="btnSend" class="btn primary" type="button" disabled>Send</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>ANONYMOUS CHAT · no accounts · nothing stored on this device</footer>
+
+<script>
+"use strict";
+/* Anonymous Chat — browser frontend.
+   Speaks the live chat service's official JSON protocol directly:
+     -> {"cmd":"join","channel":"lounge","nick":"user"}
+     <- {"cmd":"onlineUsers","users":[...]}   join confirmed (legacy: onlineSet)
+     -> {"cmd":"chat","text":"hi"}
+     <- {"cmd":"chat","nick":"...","text":"...","time":unix}
+     <- {"cmd":"warn"|"info"|"onlineJoin"|"onlineLeave"|...}
+   No local chat backend — server.py only delivers this page. */
+
+var WS_URLS = [
+  "wss://hack.chat/chat-ws",     // primary
+  "wss://wc.hack.chat/chat-ws"   // backup
+];
+var NICK_RE = /^[A-Za-z0-9_]{1,24}(#[A-Za-z0-9_]{1,24})?$/;
+var CHAN_RE = /^[A-Za-z0-9_]{1,25}$/;
+var NICK_COLORS = ["#19e6ff","#2bffab","#ff5ce1","#ffd24a","#ff8a3d","#7dffb0","#b48cff","#4dd0ff"];
+
+function $(id){ return document.getElementById(id); }
+var ui = {
+  status:$("status"), nick:$("nick"), chan:$("chan"),
+  connect:$("btnConnect"), disconnect:$("btnDisconnect"),
+  send:$("btnSend"), msg:$("msg"), messages:$("messages"),
+  users:$("users"), userCount:$("userCount"), chanName:$("chanName"),
+  formError:$("formError")
+};
+
+var ws = null, urlIdx = 0, joined = false, rejected = false, wantClose = false;
+var myNick = "", myChannel = "", users = [], state = "DISCONNECTED";
+
+function setStatus(s){
+  state = s;
+  ui.status.textContent = s;
+  ui.status.className = "status " +
+    (s === "CONNECTED" ? "st-on" : s === "CONNECTING" ? "st-connecting" :
+     s === "ERROR" ? "st-err" : "");
+}
+function updateUI(){
+  var active = (state === "CONNECTING" || state === "CONNECTED");
+  ui.connect.disabled = active;
+  ui.disconnect.disabled = !active;
+  ui.msg.disabled = !joined;
+  ui.send.disabled = !joined;
+}
+function formError(text){ ui.formError.textContent = text; ui.formError.classList.add("show"); }
+function clearFormError(){ ui.formError.classList.remove("show"); }
+
+function append(node){
+  var box = ui.messages;
+  var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.appendChild(node);
+  while (box.children.length > 300) box.removeChild(box.firstChild);
+  if (nearBottom) box.scrollTop = box.scrollHeight;
+}
+function line(cls, text){
+  var d = document.createElement("div");
+  d.className = cls; d.textContent = text;
+  append(d);
+}
+function addSys(text){
+  var t = String(text);
+
+  // Block hack.chat welcome and GitHub promotion messages
+  if (/welcome to hack\.chat|github\.com\/hack-chat/i.test(t)) return;
+
+  // Hide server protips
+  if (t.toLowerCase().indexOf("protip") === 0) return;
+
+  line("sysline", t);
+}
+function addWarn(text){ line("warnline", text); }
+function isMine(nick){
+  return nick === myNick ||
+         (myNick.indexOf("#") > -1 && nick.indexOf("!") > -1 &&
+          nick.split("!")[0] === myNick.split("#")[0]);
+}
+function nickColor(nick){
+  if (!nick) return "#ff5ce1";
+  if (isMine(nick)) return "#2bffab";
+  var h = 0;
+  for (var i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) >>> 0;
+  return NICK_COLORS[h % NICK_COLORS.length];
+}
+function addChat(nick, text, t){
+  var row = document.createElement("div"); row.className = "msg";
+  var tm = document.createElement("span"); tm.className = "t";
+  var d = t ? new Date(t * 1000) : new Date();
+  tm.textContent = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  var n = document.createElement("span"); n.className = "n";
+  n.textContent = nick; n.style.color = nickColor(nick);
+  var x = document.createElement("span"); x.textContent = text;
+  row.appendChild(tm); row.appendChild(n); row.appendChild(x);
+  append(row);
+}
+function renderUsers(){
+  ui.userCount.textContent = String(users.length);
+  ui.users.innerHTML = "";
+  if (!users.length){
+    var li = document.createElement("li");
+    li.className = "dim"; li.textContent = "nobody here yet";
+    ui.users.appendChild(li);
+    return;
+  }
+  users.forEach(function(u){
+    var li = document.createElement("li");
+    li.textContent = u;
+    if (isMine(u)) li.style.color = "#2bffab";
+    ui.users.appendChild(li);
+  });
+}
+
+function connect(){
+  clearFormError();
+  var nick = ui.nick.value.trim();
+  var chan = ui.chan.value.trim().toLowerCase();
+  if (!NICK_RE.test(nick)){
+    formError("Invalid nickname — use 1-24 characters: letters, digits, underscore (optional #password for a tripcode).");
+    ui.nick.focus();
+    return;
+  }
+  if (!CHAN_RE.test(chan)){
+    formError("Invalid channel — use 1-25 characters: letters, digits, underscore.");
+    ui.chan.focus();
+    return;
+  }
+  myNick = nick; myChannel = chan;
+  joined = false; rejected = false; wantClose = false; users = []; urlIdx = 0;
+  setStatus("CONNECTING");
+  addSys("Connecting to the chat network …");
+  openSocket();
+  updateUI();
+}
+
+function openSocket(){
+  ws = new WebSocket(WS_URLS[urlIdx]);
+  ws.onopen = function(){
+    addSys("Joining #" + myChannel + " …");
+    ws.send(JSON.stringify({ cmd: "join", channel: myChannel, nick: myNick }));
+  };
+  ws.onmessage = function(ev){
+    var d = null;
+    try { d = JSON.parse(ev.data); } catch (e) { return; }
+    handle(d);
+  };
+  ws.onerror = function(){ /* onclose always follows */ };
+  ws.onclose = function(){
+    if (joined){
+      joined = false;
+      setStatus("DISCONNECTED");
+      addSys("Connection to #" + myChannel + " closed.");
+    } else if (wantClose){
+      setStatus("DISCONNECTED");
+    } else if (rejected){
+      /* the server's rejection was already shown */
+    } else if (urlIdx < WS_URLS.length - 1){
+      urlIdx++;
+      addSys("Primary server unreachable — trying the backup server …");
+      openSocket();
+      return;
+    } else {
+      setStatus("ERROR");
+      addWarn("Could not reach the chat network — check your connection and retry.");
+    }
+    updateUI();
+  };
+}
+
+function handle(d){
+  if (!d || !d.cmd) return;
+  switch (d.cmd){
+    case "chat":
+      if (d.nick) addChat(d.nick, d.text || "", d.time);
+      else addSys(d.text || "");
+      break;
+    case "onlineUsers":
+    case "onlineSet":
+      users = (d.users || d.nicks || []).slice();
+      renderUsers();
+      if (!joined){
+        joined = true;
+        setStatus("CONNECTED");
+        ui.chanName.textContent = "#" + myChannel;
+        addSys("Joined #" + myChannel + " as " + myNick.split("#")[0] +
+               " — " + users.length + " user(s) online.");
+        ui.msg.focus();
+        updateUI();
+      }
+      break;
+    case "onlineJoin":
+    case "onlineAdd":
+      if (Array.isArray(d.users)) users = d.users.slice();
+      else if (d.nick && users.indexOf(d.nick) === -1) users.push(d.nick);
+      renderUsers();
+      addSys((d.nick || "?") + " entered the channel");
+      break;
+    case "onlineLeave":
+    case "onlineRemove":
+      if (Array.isArray(d.users)) users = d.users.slice();
+      else users = users.filter(function(u){ return u !== d.nick; });
+      renderUsers();
+      addSys((d.nick || "?") + " left the channel");
+      break;
+    case "warn":
+      addWarn(d.text || "Unknown server warning");
+      if (!joined){
+        rejected = true;
+        setStatus("ERROR");
+        try { ws.close(); } catch (e) {}
+      }
+      break;
+    case "info":
+      addSys(d.text || "");
+      break;
+    case "captcha":
+      addWarn("Server asked for human verification. Wait a minute, then reconnect.");
+      if (!joined){
+        rejected = true;
+        setStatus("ERROR");
+        try { ws.close(); } catch (e) {}
+      }
+      break;
+    default:
+      /* unknown commands are ignored */
+  }
+}
+
+function disconnect(){
+  wantClose = true;
+  joined = false;
+  setStatus("DISCONNECTED");
+  addSys("Disconnected.");
+  if (ws){ try { ws.close(); } catch (e) {} }
+  updateUI();
+}
+
+function send(){
+  var text = ui.msg.value.trim();
+  if (!text || !joined || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ cmd: "chat", text: text }));
+  ui.msg.value = "";
+}
+
+ui.connect.addEventListener("click", connect);
+ui.disconnect.addEventListener("click", disconnect);
+ui.send.addEventListener("click", send);
+ui.msg.addEventListener("keydown", function(e){
+  if (e.key === "Enter"){ e.preventDefault(); send(); }
+});
+[ui.nick, ui.chan].forEach(function(el){
+  el.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){
+      e.preventDefault();
+      if (state !== "CONNECTING" && state !== "CONNECTED") connect();
+    }
+  });
+});
+
+setStatus("DISCONNECTED");
+updateUI();
+</script>
+</body>
+</html>
